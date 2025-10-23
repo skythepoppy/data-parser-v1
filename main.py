@@ -4,8 +4,7 @@ from tqdm import tqdm
 
 def main():
     urls = [
-        "https://example.com",  
-        "https://www.bbc.com/news/world",
+        "https://www.python.org/"
     ]
 
     results = []
