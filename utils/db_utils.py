@@ -5,7 +5,7 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 
 load_dotenv()
@@ -60,3 +60,27 @@ def insert_parsed_article(url_id, title, file_path):
     connection.commit()
     cursor.close()
     connection.close()
+
+
+# helper for resetting old urls (that have errors)
+def reset_old_error_urls(hours=24):
+    connection = get_connection()
+    cursor = connection.cursor()
+
+    cutoff_time = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+    cursor.execute(
+        """
+        UPDATE urls
+        SET status = 'pending', processed_at = NULL
+        WHERE status = 'error' AND processed_at IS NOT NULL AND processed_at < %s
+        """,
+        (cutoff_time,),
+    )
+
+    affected_rows = cursor.rowcount
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+    return affected_rows

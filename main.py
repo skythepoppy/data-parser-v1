@@ -3,9 +3,15 @@ from output.writer import write_jsonl
 from utils.logger import logger
 from utils.db_utils import fetch_pending_urls, update_url_status, insert_parsed_article
 from tqdm import tqdm
+from utils.db_utils import reset_old_error_urls
 import os
 
 def main():
+    
+    reset_count = reset_old_error_urls(hours=24)
+    if reset_count > 0:
+        logger.info(f"Reset {reset_count} old 'error' URLs back to pending.")
+
     urls = fetch_pending_urls(limit=5)
     if not urls:
         logger.info("No pending URLs found in database.")
