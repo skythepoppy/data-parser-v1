@@ -5,6 +5,8 @@ import os
 import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
+from datetime import datetime, timezone
+
 
 load_dotenv()
 
@@ -36,7 +38,16 @@ def fetch_pending_urls(limit=10):
 def update_url_status(url_id, status):
     connection = get_connection()
     cursor = connection.cursor()
-    cursor.execute("UPDATE urls SET status=%s WHERE id=%s", (status, url_id))
+    if status == "done":
+        cursor.execute(
+            "UPDATE urls SET status=%s, processed_at=%s WHERE id=%s",
+            (status, datetime.now(timezone.utc), url_id),
+        )
+    else:
+        cursor.execute(
+            "UPDATE urls SET status=%s WHERE id=%s",
+            (status, url_id),
+        )
     connection.commit()
     cursor.close()
     connection.close()
