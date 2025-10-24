@@ -1,27 +1,46 @@
 from parser_core import process_url
 from output.writer import write_jsonl
 from utils.logger import logger
+from utils.db_utils import fetch_pending_urls, update_url_status, insert_parsed_article
 from tqdm import tqdm
+import os
 
 def main():
-    urls = [
-        "https://example.com",
-        "https://www.python.org/about/"
-    ]
+    urls = fetch_pending_urls(limit=5)
+    if not urls:
+        logger.info("No pending URLs found in database.")
+        return
+
+    logger.info(f"Processing {len(urls)} pending URLs...")
 
     results = []
-    logger.info(f"Parsing {len(urls)} URLs...")
-    
-    for url in tqdm(urls, desc="Parsing URLs"):
+
+    for row in tqdm(urls, desc="Parsing URLs"):
+        url_id = row["id"]
+        url = row["url"]
+
+        # Set status to 'processing'
+        update_url_status(url_id, "processing")
+
         parsed = process_url(url)
+
         if parsed:
             results.append(parsed)
-        else:
-            logger.warning(f"Skipping URL due to errors: {url}")
 
-    output_file = "parsed_output.jsonl"
-    write_jsonl(results, output_file)
-    logger.info(f"Parsing complete. Saved {len(results)} articles to {output_file}")
+            # Write file for each parsed article
+            filename = f"parsed_{url_id}.jsonl"
+            file_path = os.path.join("output_files", filename)
+            os.makedirs("output_files", exist_ok=True)
+
+            write_jsonl([parsed], file_path)
+
+            # Insert metadata into DB
+            insert_parsed_article(url_id, parsed["title"], file_path)
+            update_url_status(url_id, "parsed")
+        else:
+            update_url_status(url_id, "error")
+
+    logger.info("All URLs processed.")
 
 if __name__ == "__main__":
     main()
