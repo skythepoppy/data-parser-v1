@@ -13,15 +13,14 @@ from utils.db_utils import (
     insert_urls_bulk,  
 )
 
-def load_urls_from_csv(file_path):
-    """Reads a CSV file and returns a list of URLs."""
+def load_urls_from_csv(csv_file):
+    import csv
     urls = []
-    with open(file_path, "r", newline="", encoding="utf-8") as csvfile:
-        reader = csv.reader(csvfile)
+    with open(csv_file, newline="", encoding="utf-8") as f:
+        reader = csv.DictReader(f)
         for row in reader:
-            if row and row[0].startswith("http"):
-                urls.append(row[0].strip())
-    return urls
+            urls.append(row["url"])
+    insert_urls_bulk(urls)
 
 
 def main():

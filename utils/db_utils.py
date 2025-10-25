@@ -54,7 +54,8 @@ def fetch_pending_urls(limit=100):
 def update_url_status(url_id, status):
     connection = get_connection()
     cursor = connection.cursor()
-    if status == "done":
+    
+    if status in ("parsed", "done", "error"):
         cursor.execute(
             "UPDATE urls SET status=%s, processed_at=%s WHERE id=%s",
             (status, datetime.now(timezone.utc), url_id),
@@ -64,9 +65,11 @@ def update_url_status(url_id, status):
             "UPDATE urls SET status=%s WHERE id=%s",
             (status, url_id),
         )
+    
     connection.commit()
     cursor.close()
     connection.close()
+
 
 def insert_parsed_article(url_id, title, file_path): 
     connection = get_connection()
