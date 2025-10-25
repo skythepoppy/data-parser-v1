@@ -2,8 +2,8 @@ from selectolax.parser import HTMLParser
 from utils.logger import logger
 
 def extract_article(html):
+  
     if not html:
-        # missing/malformed html
         logger.warning("No HTML provided to extract_article")
         return {"title": "No Title", "content": "No content available"}
 
@@ -13,14 +13,18 @@ def extract_article(html):
         logger.error(f"Failed to parse HTML: {e}")
         return {"title": "No Title", "content": "No content available"}
 
-    # for title
-    h1 = tree.css_first("h1")
-    title_tag = tree.css_first("title")
-    title = h1.text().strip() if h1 else (title_tag.text().strip() if title_tag else "No Title")
+    # title
+    title = None
+    for tag in ["h1", "h2", "title"]:
+        element = tree.css_first(tag)
+        if element and element.text().strip():
+            title = element.text().strip()
+            break
+    title = title or "No Title"
     if title == "No Title":
         logger.warning("No title found in HTML")
 
-    # for paragrpahs
+    # paragraphs
     paragraphs = [p.text().strip() for p in tree.css("p") if p.text().strip()]
     if not paragraphs:
         logger.warning("No paragraphs found in HTML")
