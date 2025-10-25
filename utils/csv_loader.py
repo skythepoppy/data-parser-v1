@@ -24,7 +24,8 @@ def load_urls_from_csv(csv_file_path: str):
                     """,
                     (url, "pending", datetime.utcnow())
                 )
-                inserted_count += 1
+                if cursor.rowcount > 0:
+                    inserted_count += 1
 
         connection.commit()
         logger.info(f"Inserted {inserted_count} URLs from {csv_file_path}")
