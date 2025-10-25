@@ -62,10 +62,7 @@ async def process_url_async(url: str, session: aiohttp.ClientSession, lowercase_
 
 
 async def process_urls_async(url_rows, lowercase_content: bool = False):
-    """
-    Processes multiple URL rows concurrently using a single aiohttp session.
-    url_rows: list of dicts containing at least {"id": int, "url": str}
-    """
+  
     results = []
     os.makedirs("output_files", exist_ok=True)
 
@@ -97,9 +94,7 @@ async def process_urls_async(url_rows, lowercase_content: bool = False):
 
 
 def process_url(url: str, lowercase_content: bool = False) -> Optional[Dict[str, Any]]:
-    """
-    Synchronous wrapper to process a single URL using the async workflow.
-    """
+  
     async def _runner():
         async with aiohttp.ClientSession() as session:
             return await process_url_async(url, session, lowercase_content)
