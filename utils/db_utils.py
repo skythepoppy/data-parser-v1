@@ -16,6 +16,21 @@ DB_PASSWORD = os.getenv("DB_PASSWORD")
 DB_HOST = os.getenv("DB_HOST")
 DB_PORT = os.getenv("DB_PORT")
 
+def insert_urls_bulk(url_list):
+    connection = get_connection()
+    try:
+        with connection.cursor() as cursor:
+            for url in url_list:
+                cursor.execute("""
+                    INSERT INTO urls (url, status, created_at)
+                    VALUES (%s, 'pending', CURRENT_TIMESTAMP)
+                    ON CONFLICT (url) DO NOTHING;
+                """, (url,))
+        connection.commit()
+    finally:
+        connection.close()
+
+
 def get_connection():
     connection = psycopg2.connect(
         dbname=DB_NAME, 
@@ -26,10 +41,10 @@ def get_connection():
     )
     return connection
 
-def fetch_pending_urls(limit=10): 
+def fetch_pending_urls(limit=100): 
     connection = get_connection()
     cursor = connection.cursor(cursor_factory=RealDictCursor)
-    cursor.execute("SELECT * FROM urls WHERE status='processing' ORDER BY created_at LIMIT %s", (limit,))
+    cursor.execute("SELECT * FROM urls WHERE status='pending' ORDER BY created_at LIMIT %s", (limit,))
     urls = cursor.fetchall()
     cursor.close()
     connection.close()
