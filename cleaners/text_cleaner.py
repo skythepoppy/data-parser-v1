@@ -1,12 +1,20 @@
 import re
+from utils.logger import logger
 
-def clean_text(text): 
+def clean_text(text, lowercase=False):
 
-    """ basic cleanup for whitespace, links, and special char"""
+    if not text:
+        logger.warning("clean_text: received empty or None text")
+        return ""
 
-    text=re.sub(r"http\S+", "", text)     #urls
-    text=re.sub(r"\s+", " ", text)    # whitepsace
-    text = re.sub(r"[^A-Za-z0-9.,!?;:'\"()\s-]", "", text)   #special char
-    return text.strip()
+    # remove URLs
+    text = re.sub(r"http\S+", "", text)
     
+    # whitespace normalization
+    text = re.sub(r"\s+", " ", text)
     
+    # remove unwanted char, keep punct and unicode char
+    text = re.sub(r"[^\w\s.,!?;:'\"()-]", "", text, flags=re.UNICODE)
+    
+    cleaned = text.strip()
+    return cleaned.lower() if lowercase else cleaned

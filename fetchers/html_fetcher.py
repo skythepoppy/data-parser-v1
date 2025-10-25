@@ -5,7 +5,9 @@ from time import sleep
 def fetch_html(url, retries=3, backoff=2):
 
     headers = {
+        "User-Agent": "Mozilla/5.0 (compatible; DataParser/1.0)"
     }
+
     for attempt in range(1, retries + 1):
         try:
             response = requests.get(url, timeout=10, headers=headers)
