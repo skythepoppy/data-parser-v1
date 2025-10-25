@@ -26,8 +26,8 @@ It fetches, extracts, cleans, and processes web articles into structured JSON da
 ## Installation and Usage
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/yourusername/web-article-parser.git
-   cd web-article-parser
+   git clone (https://github.com/skythepoppy/data-parser-v1.git)
+   cd data-parser-v1
    ```
 
 2. **Create virtual environment**
