@@ -1,9 +1,12 @@
+import os
 import asyncio
 from typing import Optional, Dict, Any
 import aiohttp
 from extractors.html_extractor import extract_article
 from cleaners.text_cleaner import clean_text
 from utils.logger import logger
+from utils.db_utils import update_url_status, insert_parsed_article
+from output.writer import write_jsonl
 
 
 async def fetch_html_async(url: str, session: aiohttp.ClientSession, retries: int = 3, backoff: int = 2) -> Optional[str]:
@@ -69,10 +72,11 @@ async def process_urls_async(url_rows, lowercase_content: bool = False):
     async with aiohttp.ClientSession() as session:
 
         async def handle_row(row):
-            url_id = row["id"]
-            url = row["url"]
-            from utils.db_utils import update_url_status, insert_parsed_article
-            from output.writer import write_jsonl
+            url_id = row.get("id")
+            url = row.get("url")
+            if url_id is None or not url:
+                logger.warning(f"Skipping row with missing 'id' or 'url': {row}")
+                return
 
             update_url_status(url_id, "processing")
             parsed = await process_url_async(url, session, lowercase_content)
@@ -90,3 +94,14 @@ async def process_urls_async(url_rows, lowercase_content: bool = False):
         await asyncio.gather(*tasks)
 
     return results
+
+
+def process_url(url: str, lowercase_content: bool = False) -> Optional[Dict[str, Any]]:
+    """
+    Synchronous wrapper to process a single URL using the async workflow.
+    """
+    async def _runner():
+        async with aiohttp.ClientSession() as session:
+            return await process_url_async(url, session, lowercase_content)
+
+    return asyncio.run(_runner())

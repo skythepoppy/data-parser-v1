@@ -12,10 +12,7 @@ from utils.db_utils import (
 )
 import asyncio
 
-# import async parser
-from parser_core import process_url_async  
-from parser_core import process_url
-
+from parser_core import process_url_async, process_url  
 
 def load_urls_from_csv(csv_file):
     import csv
@@ -37,33 +34,7 @@ def load_urls_from_csv(csv_file):
     return urls
 
 
-async def process_urls_async(url_rows):
-    results = []
-    os.makedirs("output_files", exist_ok=True)
-
-    async def handle_row(row):
-        url_id = row["id"]
-        url = row["url"]
-        update_url_status(url_id, "processing")
-        parsed = await process_url_async(url)
-        if parsed:
-            results.append(parsed)
-            filename = f"parsed_{url_id}.jsonl"
-            file_path = os.path.join("output_files", filename)
-            write_jsonl([parsed], file_path)
-            insert_parsed_article(url_id, parsed["title"], file_path)
-            update_url_status(url_id, "parsed")
-        else:
-            update_url_status(url_id, "error")
-
-    tasks = [handle_row(row) for row in url_rows]
-    await asyncio.gather(*tasks)
-    return results
-
-
 def main():
-
-    # cli implementation
     parser = argparse.ArgumentParser(description="Data Parser CLI Tool")
     parser.add_argument("--input", type=str, help="Path to CSV file containing URLs")
     parser.add_argument("--limit", type=int, help="Limit number of URLs to process", default=5)
@@ -71,7 +42,6 @@ def main():
     parser.add_argument("--use-async", action="store_true", help="Use asynchronous fetching")
     args = parser.parse_args()
 
-    # old urls
     reset_count = reset_old_error_urls(hours=args.reset_hours)
     if reset_count > 0:
         logger.info(f"Reset {reset_count} old 'error' URLs back to pending.")
@@ -84,27 +54,29 @@ def main():
         else:
             logger.warning("No valid URLs found in provided CSV file.")
 
-    urls = fetch_pending_urls(limit=args.limit)
-    if not urls:
+    url_rows = fetch_pending_urls(limit=args.limit)
+    if not url_rows:
         logger.info("No pending URLs found in database.")
         return
 
-    logger.info(f"Processing {len(urls)} pending URLs...")
-
-    os.makedirs("output_files", exist_ok=True)
+    logger.info(f"Processing {len(url_rows)} pending URLs...")
 
     if args.use_async:
-        asyncio.run(process_urls_async(urls))
+        # call async processor from parser_core
+        asyncio.run(process_url_async(url_rows))
     else:
         # synchronous processing
-        results = []
-        for row in tqdm(urls, desc="Parsing URLs"):
-            url_id = row["id"]
-            url = row["url"]
+        os.makedirs("output_files", exist_ok=True)
+        for row in tqdm(url_rows, desc="Parsing URLs"):
+            url_id = row.get("id")
+            url = row.get("url")
+            if not url_id or not url:
+                logger.warning(f"Skipping row with missing id or url: {row}")
+                continue
+
             update_url_status(url_id, "processing")
             parsed = process_url(url)
             if parsed:
-                results.append(parsed)
                 filename = f"parsed_{url_id}.jsonl"
                 file_path = os.path.join("output_files", filename)
                 write_jsonl([parsed], file_path)
