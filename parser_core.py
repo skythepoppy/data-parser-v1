@@ -1,55 +1,92 @@
+import asyncio
 from typing import Optional, Dict, Any
-from fetchers.html_fetcher import fetch_html
+import aiohttp
 from extractors.html_extractor import extract_article
 from cleaners.text_cleaner import clean_text
 from utils.logger import logger
 
 
-def process_url(url: str, lowercase_content: bool = False) -> Optional[Dict[str, Any]]:
- 
+async def fetch_html_async(url: str, session: aiohttp.ClientSession, retries: int = 3, backoff: int = 2) -> Optional[str]:
+    headers = {"User-Agent": "Mozilla/5.0 (compatible; DataParser/1.0)"}
 
+    for attempt in range(1, retries + 1):
+        try:
+            async with session.get(url, timeout=10, headers=headers) as response:
+                response.raise_for_status()
+                return await response.text()
+        except (aiohttp.ClientError, asyncio.TimeoutError) as e:
+            logger.warning(f"Attempt {attempt} failed for {url}: {e}")
+            if attempt < retries:
+                await asyncio.sleep(backoff * attempt)
+            else:
+                logger.error(f"Failed to fetch {url} after {retries} attempts")
+                return None
+
+
+async def process_url_async(url: str, session: aiohttp.ClientSession, lowercase_content: bool = False) -> Optional[Dict[str, Any]]:
     if not url or not isinstance(url, str):
-        logger.error("process_url: invalid url input: %r", url)
+        logger.error("Invalid URL input: %r", url)
         return None
 
-    # fetch
-    try:
-        html = fetch_html(url)
-    except Exception as exc:
-        logger.exception("process_url: unexpected error during fetch for %s", url)
-        return None
-
+    html = await fetch_html_async(url, session)
     if not html:
-        logger.warning("process_url: no HTML returned for %s", url)
+        logger.warning("No HTML returned for %s", url)
         return None
 
-    # Extract
     try:
         article = extract_article(html)
     except Exception:
-        logger.exception("process_url: extractor raised an exception for %s", url)
+        logger.exception("Extractor raised exception for %s", url)
         return None
 
     if not isinstance(article, dict):
-        logger.error("process_url: extractor returned non-dict for %s: %r", url, article)
+        logger.error("Extractor returned non-dict for %s: %r", url, article)
         return None
 
-    # Clean content
-    content = article.get("content")
-    if not content or str(content).strip().lower() in ["none", ""]:
-        logger.warning("process_url: empty/missing content for %s", url)
-       
+    content_text = str(article.get("content") or "").strip()
+    if not content_text or content_text.lower() == "none":
+        logger.warning("Empty content for %s", url)
         article["content"] = "No content available"
     else:
-        try:
-            article["content"] = clean_text(str(content), lowercase=lowercase_content)
-        except Exception:
-            logger.exception("process_url: cleaner raised an exception for %s", url)
-            return None
+        article["content"] = clean_text(content_text, lowercase=lowercase_content)
 
-    # title exists 
     if not article.get("title"):
+        logger.warning("No title found for %s", url)
         article["title"] = "No Title"
 
     article["url"] = url
     return article
+
+
+async def process_urls_async(url_rows, lowercase_content: bool = False):
+    """
+    Processes multiple URL rows concurrently using a single aiohttp session.
+    url_rows: list of dicts containing at least {"id": int, "url": str}
+    """
+    results = []
+    os.makedirs("output_files", exist_ok=True)
+
+    async with aiohttp.ClientSession() as session:
+
+        async def handle_row(row):
+            url_id = row["id"]
+            url = row["url"]
+            from utils.db_utils import update_url_status, insert_parsed_article
+            from output.writer import write_jsonl
+
+            update_url_status(url_id, "processing")
+            parsed = await process_url_async(url, session, lowercase_content)
+            if parsed:
+                results.append(parsed)
+                filename = f"parsed_{url_id}.jsonl"
+                file_path = os.path.join("output_files", filename)
+                write_jsonl([parsed], file_path)
+                insert_parsed_article(url_id, parsed["title"], file_path)
+                update_url_status(url_id, "parsed")
+            else:
+                update_url_status(url_id, "error")
+
+        tasks = [handle_row(row) for row in url_rows]
+        await asyncio.gather(*tasks)
+
+    return results
