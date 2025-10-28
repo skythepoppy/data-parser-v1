@@ -119,8 +119,12 @@ async def process_urls_async(url_rows, lowercase_content: bool = False):
 
 
 def process_url(url: str, lowercase_content: bool = False) -> Optional[Dict[str, Any]]:
+   
     async def _runner():
         async with aiohttp.ClientSession() as session:
-            return await process_url_async(url, session, lowercase_content)
+            article = await process_url_async(url, session, lowercase_content)
+            #use enrichment from async funct
+            return article
 
     return asyncio.run(_runner())
+
