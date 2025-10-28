@@ -2,15 +2,12 @@ import os
 import asyncio
 from typing import Optional, Dict, Any
 import aiohttp
-from extractors.html_extractor import extract_article
-from extractors.pdf_extractor import extract_pdf
-from extractors.markdown_extractor import extract_markdown
 from cleaners.text_cleaner import clean_text
 from utils.logger import logger
 from utils.db_utils import update_url_status, insert_parsed_article
 from output.writer import write_jsonl
 from utils.format_detector import detect_format
-
+from extractors.universal_extractor import extract_content  
 
 async def fetch_content_async(url: str, session: aiohttp.ClientSession, retries: int = 3, backoff: int = 2) -> Optional[Dict[str, Any]]:
     headers = {"User-Agent": "Mozilla/5.0 (compatible; DataParser/1.0)"}
@@ -47,24 +44,20 @@ async def process_url_async(url: str, session: aiohttp.ClientSession, lowercase_
     # detect format
     format_type = detect_format(url, content_type)
 
+    # prepare source for universal extractor
     try:
-        if format_type == "html":
-            text_content = content_data.decode("utf-8", errors="ignore")
-            article = extract_article(text_content)
-        elif format_type == "pdf":
-            # save PDF temporarily to extract text
+        if format_type == "pdf":
             tmp_file = f"temp_{os.getpid()}.pdf"
             with open(tmp_file, "wb") as f:
                 f.write(content_data)
-            article = extract_pdf(tmp_file)
+            article = extract_content(tmp_file, source_type="pdf")
             os.remove(tmp_file)
-        elif format_type == "markdown":
-            text_content = content_data.decode("utf-8", errors="ignore")
-            article = extract_markdown(text_content)
         else:
-            logger.warning(f"Unknown format for {url}")
-            article = {"title": "Unknown Format", "content": ""}
-
+            text_content = content_data.decode("utf-8", errors="ignore")
+            if format_type == "markdown":
+                article = extract_content(text_content, source_type="markdown")
+            else:  # html or unknown
+                article = extract_content(text_content, source_type="html")
     except Exception as e:
         logger.exception(f"Extractor raised exception for {url}: {e}")
         return None
