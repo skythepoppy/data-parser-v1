@@ -8,6 +8,7 @@ from utils.db_utils import update_url_status, insert_parsed_article
 from output.writer import write_jsonl
 from utils.format_detector import detect_format
 from extractors.universal_extractor import extract_content  
+from semantic_enricher import enrich_text
 
 async def fetch_content_async(url: str, session: aiohttp.ClientSession, retries: int = 3, backoff: int = 2) -> Optional[Dict[str, Any]]:
     headers = {"User-Agent": "Mozilla/5.0 (compatible; DataParser/1.0)"}
@@ -76,6 +77,12 @@ async def process_url_async(url: str, session: aiohttp.ClientSession, lowercase_
         article["title"] = "No Title"
 
     article["url"] = url
+
+    # implementation of semantic enrichment 
+    try:
+        article = enrich_text(article)
+    except Exception as e:
+        logger.error(f"Semantic enrichment failed for {url}: {e}")
     return article
 
 
