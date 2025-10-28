@@ -71,14 +71,31 @@ def update_url_status(url_id, status):
     connection.close()
 
 
-def insert_parsed_article(url_id, title, file_path): 
+def insert_parsed_article(
+    url_id, title, file_path, keywords=None, summary=None, sentiment=None, entities=None
+):
     connection = get_connection()
     cursor = connection.cursor()
-    cursor.execute("INSERT INTO parsed_articles (url_id, title, file_path) VALUES (%s, %s, %s)",
-        (url_id, title, file_path))
+    cursor.execute(
+        """
+        INSERT INTO parsed_articles
+        (url_id, title, file_path, keywords, summary, sentiment, entities)
+        VALUES (%s, %s, %s, %s, %s, %s, %s)
+        """,
+        (
+            url_id,
+            title,
+            file_path,
+            keywords,
+            summary,
+            sentiment,
+            entities,
+        ),
+    )
     connection.commit()
     cursor.close()
     connection.close()
+
 
 
 # helper for resetting old urls (that have errors)
