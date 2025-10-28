@@ -41,23 +41,21 @@ async def process_url_async(url: str, session: aiohttp.ClientSession, lowercase_
     content_data = fetched["data"]
     content_type = fetched["content_type"]
 
-    # detect format
-    format_type = detect_format(url, content_type)
+    # detection using content bytes
+    format_type = detect_format(url, content_type, data=content_data)
 
-    # prepare source for universal extractor
     try:
         if format_type == "pdf":
+            # save PDF temporarily for extraction
             tmp_file = f"temp_{os.getpid()}.pdf"
             with open(tmp_file, "wb") as f:
                 f.write(content_data)
             article = extract_content(tmp_file, source_type="pdf")
             os.remove(tmp_file)
         else:
+            # decode bytes for HTML/Markdown/plain text
             text_content = content_data.decode("utf-8", errors="ignore")
-            if format_type == "markdown":
-                article = extract_content(text_content, source_type="markdown")
-            else:  # html or unknown
-                article = extract_content(text_content, source_type="html")
+            article = extract_content(text_content, source_type=format_type)
     except Exception as e:
         logger.exception(f"Extractor raised exception for {url}: {e}")
         return None
@@ -79,6 +77,7 @@ async def process_url_async(url: str, session: aiohttp.ClientSession, lowercase_
 
     article["url"] = url
     return article
+
 
 
 async def process_urls_async(url_rows, lowercase_content: bool = False):
