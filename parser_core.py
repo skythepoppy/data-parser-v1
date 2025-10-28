@@ -10,6 +10,7 @@ from utils.format_detector import detect_format
 from extractors.universal_extractor import extract_content  
 from semantic_enricher import enrich_text
 
+
 async def fetch_content_async(url: str, session: aiohttp.ClientSession, retries: int = 3, backoff: int = 2) -> Optional[Dict[str, Any]]:
     headers = {"User-Agent": "Mozilla/5.0 (compatible; DataParser/1.0)"}
 
@@ -42,19 +43,17 @@ async def process_url_async(url: str, session: aiohttp.ClientSession, lowercase_
     content_data = fetched["data"]
     content_type = fetched["content_type"]
 
-    # detection using content bytes
+    # detect format
     format_type = detect_format(url, content_type, data=content_data)
 
     try:
         if format_type == "pdf":
-            # save PDF temporarily for extraction
             tmp_file = f"temp_{os.getpid()}.pdf"
             with open(tmp_file, "wb") as f:
                 f.write(content_data)
             article = extract_content(tmp_file, source_type="pdf")
             os.remove(tmp_file)
         else:
-            # decode bytes for HTML/Markdown/plain text
             text_content = content_data.decode("utf-8", errors="ignore")
             article = extract_content(text_content, source_type=format_type)
     except Exception as e:
@@ -78,13 +77,13 @@ async def process_url_async(url: str, session: aiohttp.ClientSession, lowercase_
 
     article["url"] = url
 
-    # implementation of semantic enrichment 
+    # semantic enrichment
     try:
         article = enrich_text(article)
     except Exception as e:
         logger.error(f"Semantic enrichment failed for {url}: {e}")
-    return article
 
+    return article
 
 
 async def process_urls_async(url_rows, lowercase_content: bool = False):
@@ -107,7 +106,17 @@ async def process_urls_async(url_rows, lowercase_content: bool = False):
                 filename = f"parsed_{url_id}.jsonl"
                 file_path = os.path.join("output_files", filename)
                 write_jsonl([parsed], file_path)
-                insert_parsed_article(url_id, parsed["title"], file_path)
+
+                insert_parsed_article(
+                    url_id,
+                    parsed["title"],
+                    file_path,
+                    keywords=parsed.get("keywords"),
+                    summary=parsed.get("summary"),
+                    sentiment=parsed.get("sentiment"),
+                    entities=parsed.get("entities")
+                )
+
                 update_url_status(url_id, "parsed")
             else:
                 update_url_status(url_id, "error")
@@ -119,12 +128,8 @@ async def process_urls_async(url_rows, lowercase_content: bool = False):
 
 
 def process_url(url: str, lowercase_content: bool = False) -> Optional[Dict[str, Any]]:
-   
     async def _runner():
         async with aiohttp.ClientSession() as session:
-            article = await process_url_async(url, session, lowercase_content)
-            #use enrichment from async funct
-            return article
+            return await process_url_async(url, session, lowercase_content)
 
     return asyncio.run(_runner())
-
