@@ -12,7 +12,8 @@ from utils.db_utils import (
 )
 import asyncio
 
-from parser_core import process_url_async, process_url  
+from parser_core import process_urls_async, process_url  
+
 
 def load_urls_from_csv(csv_file):
     import csv
@@ -42,10 +43,12 @@ def main():
     parser.add_argument("--use-async", action="store_true", help="Use asynchronous fetching")
     args = parser.parse_args()
 
+    # old urls reset
     reset_count = reset_old_error_urls(hours=args.reset_hours)
     if reset_count > 0:
         logger.info(f"Reset {reset_count} old 'error' URLs back to pending.")
 
+    # new urls from .csv
     if args.input:
         urls = load_urls_from_csv(args.input)
         if urls:
@@ -54,6 +57,7 @@ def main():
         else:
             logger.warning("No valid URLs found in provided CSV file.")
 
+    # fetch processing urls in db
     url_rows = fetch_pending_urls(limit=args.limit)
     if not url_rows:
         logger.info("No pending URLs found in database.")
@@ -62,10 +66,13 @@ def main():
     logger.info(f"Processing {len(url_rows)} pending URLs...")
 
     if args.use_async:
-        # call async processor from parser_core
-        asyncio.run(process_url_async(url_rows))
+        # async batch processing
+        try:
+            asyncio.run(process_urls_async(url_rows))
+        except Exception as e:
+            logger.exception(f"Async processing failed: {e}")
     else:
-        # synchronous processing
+        # sync processing
         os.makedirs("output_files", exist_ok=True)
         for row in tqdm(url_rows, desc="Parsing URLs"):
             url_id = row.get("id")
@@ -80,7 +87,17 @@ def main():
                 filename = f"parsed_{url_id}.jsonl"
                 file_path = os.path.join("output_files", filename)
                 write_jsonl([parsed], file_path)
-                insert_parsed_article(url_id, parsed["title"], file_path)
+
+                insert_parsed_article(
+                    url_id,
+                    parsed["title"],
+                    file_path,
+                    keywords=parsed.get("keywords"),
+                    summary=parsed.get("summary"),
+                    sentiment=parsed.get("sentiment"),
+                    entities=parsed.get("entities")
+                )
+
                 update_url_status(url_id, "parsed")
             else:
                 update_url_status(url_id, "error")
