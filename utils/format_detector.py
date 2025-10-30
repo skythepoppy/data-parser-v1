@@ -1,31 +1,37 @@
 
-import mimetypes
-import os
-from urllib.parse import urlparse
+from typing import Optional
 
-def detect_format(url: str, content_type: str = None) -> str:
-   
+def detect_format(url: str, content_type: str = "", data: bytes = None) -> str:
+  
+    
+    #try furst content type header
     if content_type:
-        if "text/html" in content_type:
-            return "html"
-        if "application/pdf" in content_type:
+        content_type = content_type.lower()
+        if "pdf" in content_type:
             return "pdf"
-        if "application/json" in content_type:
+        if "json" in content_type:
             return "json"
-        if "text/markdown" in content_type:
-            return "markdown"
-
-
-    # end of file path check
-    path = urlparse(url).path
-    ext = os.path.splitext(path)[1].lower()
-    if ext in [".html", ".htm"]:
-        return "html"
-    if ext == ".pdf":
+        if "html" in content_type or "text" in content_type:
+            return "html"
+    
+    # fallback to URL file extension
+    if url.endswith(".pdf"):
         return "pdf"
-    if ext == ".md":
-        return "markdown"
-    if ext == ".json":
+    if url.endswith(".json"):
         return "json"
-
-    return "unknown"
+    if url.endswith(".html") or url.endswith(".htm"):
+        return "html"
+    
+    #inspect the first bytes of data
+    if data:
+        if data.startswith(b"%PDF"):
+            return "pdf"
+        try:
+            decoded = data.decode("utf-8", errors="ignore")
+            if "<html" in decoded.lower():
+                return "html"
+        except Exception:
+            pass
+    
+    
+    return "html"

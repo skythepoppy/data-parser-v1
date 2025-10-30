@@ -6,6 +6,8 @@ import psycopg2
 from psycopg2.extras import RealDictCursor
 from dotenv import load_dotenv
 from datetime import datetime, timezone, timedelta
+from psycopg2.extras import Json 
+from utils.prompttracker_client import send_to_prompttracker
 
 load_dotenv()
 
@@ -81,20 +83,36 @@ def insert_parsed_article(
         INSERT INTO parsed_articles
         (url_id, title, file_path, keywords, summary, sentiment, entities)
         VALUES (%s, %s, %s, %s, %s, %s, %s)
+        RETURNING id
         """,
         (
             url_id,
             title,
             file_path,
-            keywords,
-            summary,
-            sentiment,
-            entities,
+            Json(keywords) if keywords is not None else None,
+            Json(summary) if summary is not None else None,
+            Json(sentiment) if sentiment is not None else None,
+            Json(entities) if entities is not None else None,
         ),
     )
+    parsed_id = cursor.fetchone()[0]  # get the inserted row id
     connection.commit()
     cursor.close()
     connection.close()
+
+    # Build article dict for PromptTracker
+    article_dict = {
+        "title": title,
+        "summary": summary or "",
+        "keywords": keywords or [],
+        "entities": entities or [],
+        "sentiment": sentiment or "neutral"
+    }
+
+    # Send to PromptTracker asynchronously (optional)
+    send_to_prompttracker(article_dict)
+
+    return parsed_id
 
 
 
